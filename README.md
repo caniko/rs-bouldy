@@ -35,12 +35,32 @@ pub struct UnrealApiV1 {
 }
 ```
 
+`UnrealApiV2` keeps `UnrealApiV1` as its first field and adds a separate
+game-agnostic discovery interface:
+
+```rust
+#[repr(C)]
+pub struct UnrealApiV2 {
+    pub lifecycle: UnrealApiV1,
+    pub discovery: UnrealDiscoveryApiV1,
+}
+```
+
+The discovery API exposes filtered scans over broad Unreal concepts only:
+objects, classes, functions, and properties. It is intended for reconnaissance
+mods that need to discover candidate symbols before adding game-specific hooks.
+It does not include SDK bindings, offsets, generated game headers, asset
+parsing, or game-specific patching behavior.
+
 Rust mods export:
 
 - `unreal_rust_init(UnrealApi*) -> bool`
 - `bouldy_rust_init_v1(UnrealApiV1*) -> bool`
+- `bouldy_rust_init_v2(UnrealApiV2*) -> bool`
 
 The V1 entrypoint lets the UE4SS shim register Rust tick and shutdown callbacks.
+The V2 entrypoint lets the UE4SS shim provide both lifecycle callbacks and a
+discovery backend.
 
 ## Example Mod
 
@@ -115,10 +135,11 @@ The C++ shim lives in `cpp-shim/bouldy_ue4ss_shim.cpp`. Build it as the UE4SS-si
 
 The shim:
 
-1. Resolves `bouldy_rust_init_v1`.
+1. Resolves `bouldy_rust_init_v2`.
 2. Provides logging and delta-time callbacks.
 3. Provides tick/shutdown registration functions.
-4. Forwards UE4SS lifecycle events into the registered Rust callbacks.
+4. Provides discovery scan/export callbacks.
+5. Forwards UE4SS lifecycle events into the registered Rust callbacks.
 
 Dynamic DLL loading avoids MSVC/GNU import-library mismatches when the Rust DLL is cross-compiled with MinGW.
 

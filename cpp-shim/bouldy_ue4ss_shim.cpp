@@ -1,7 +1,8 @@
 // Minimal Bouldy UE4SS bridge example.
 //
 // This file is intentionally small and self-contained. Adapt Startup, OnTick,
-// and Shutdown to the lifecycle hooks exposed by your UE4SS mod template.
+// Shutdown, and discovery callbacks to the lifecycle hooks exposed by your
+// UE4SS mod template.
 
 #include <windows.h>
 
@@ -23,7 +24,34 @@ struct UnrealApiV1 {
     void (*register_shutdown)(ShutdownCallback callback);
 };
 
-using BouldyInitV1 = bool (*)(UnrealApiV1* api);
+using DiscoveryVisitor = bool (*)(const void* candidate, void* user_data);
+
+struct DiscoveryFilter {
+    const char* const* terms;
+    size_t term_count;
+    uint32_t kind_mask;
+    size_t max_results;
+};
+
+struct DiscoveryCandidate {
+    uint32_t kind;
+    const char* name;
+    const char* path;
+    const char* owner;
+    uint64_t flags;
+};
+
+struct UnrealDiscoveryApiV1 {
+    size_t (*scan)(const DiscoveryFilter* filter, DiscoveryVisitor visitor, void* user_data);
+    void (*export_record)(const char* channel, const char* payload);
+};
+
+struct UnrealApiV2 {
+    UnrealApiV1 lifecycle;
+    UnrealDiscoveryApiV1 discovery;
+};
+
+using BouldyInitV2 = bool (*)(UnrealApiV2* api);
 }
 
 namespace {
@@ -48,6 +76,27 @@ void RegisterTick(TickCallback callback) {
 void RegisterShutdown(ShutdownCallback callback) {
     g_shutdown_callback = callback;
 }
+
+size_t ScanDiscovery(const DiscoveryFilter* filter, DiscoveryVisitor visitor, void* user_data) {
+    // Replace this stub with UE4SS-backed object/class/function/property
+    // enumeration. The filter terms are generic UTF-8 strings supplied by Rust.
+    if (!filter || !visitor) {
+        return 0;
+    }
+
+    ShimLog("Bouldy discovery scan requested");
+    for (size_t index = 0; index < filter->term_count; ++index) {
+        ShimLog(filter->terms[index] ? filter->terms[index] : "<null term>");
+    }
+
+    return 0;
+}
+
+void ExportDiscoveryRecord(const char* channel, const char* payload) {
+    // Replace this with file export or UE4SS logging in a real shim.
+    std::printf("[Bouldy:%s] %s\n", channel ? channel : "discovery",
+                payload ? payload : "<null>");
+}
 } // namespace
 
 bool Startup() {
@@ -57,20 +106,22 @@ bool Startup() {
         return false;
     }
 
-    auto init = reinterpret_cast<BouldyInitV1>(
-        GetProcAddress(g_rust_module, "bouldy_rust_init_v1"));
+    auto init = reinterpret_cast<BouldyInitV2>(
+        GetProcAddress(g_rust_module, "bouldy_rust_init_v2"));
     if (!init) {
-        ShimLog("failed to find bouldy_rust_init_v1");
+        ShimLog("failed to find bouldy_rust_init_v2");
         FreeLibrary(g_rust_module);
         g_rust_module = nullptr;
         return false;
     }
 
-    UnrealApiV1 api{};
-    api.base.log = &ShimLog;
-    api.base.get_delta_seconds = &GetDeltaSeconds;
-    api.register_tick = &RegisterTick;
-    api.register_shutdown = &RegisterShutdown;
+    UnrealApiV2 api{};
+    api.lifecycle.base.log = &ShimLog;
+    api.lifecycle.base.get_delta_seconds = &GetDeltaSeconds;
+    api.lifecycle.register_tick = &RegisterTick;
+    api.lifecycle.register_shutdown = &RegisterShutdown;
+    api.discovery.scan = &ScanDiscovery;
+    api.discovery.export_record = &ExportDiscoveryRecord;
 
     if (!init(&api)) {
         ShimLog("Rust mod initialization returned false");
@@ -102,4 +153,3 @@ void Shutdown() {
         g_rust_module = nullptr;
     }
 }
-

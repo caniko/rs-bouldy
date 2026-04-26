@@ -7,6 +7,7 @@ pub type ShutdownCallback = extern "C" fn();
 
 pub struct UnrealApi;
 pub struct UnrealApiV1;
+pub struct UnrealApiV2;
 pub struct ModContext;
 
 pub trait Mod {
@@ -23,6 +24,17 @@ pub fn init_with_base_api(_api: *mut UnrealApi, init: impl FnOnce(&mut ModContex
 
 pub fn init_with_v1_api(
     _api: *mut UnrealApiV1,
+    _tick: TickCallback,
+    _shutdown: ShutdownCallback,
+    init: impl FnOnce(&mut ModContext),
+) -> bool {
+    let mut ctx = ModContext;
+    init(&mut ctx);
+    true
+}
+
+pub fn init_with_v2_api(
+    _api: *mut UnrealApiV2,
     _tick: TickCallback,
     _shutdown: ShutdownCallback,
     init: impl FnOnce(&mut ModContext),
@@ -49,4 +61,3 @@ struct BadMod {
 impl Mod for BadMod {}
 
 fn main() {}
-
