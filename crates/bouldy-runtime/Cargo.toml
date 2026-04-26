@@ -1,0 +1,16 @@
+[package]
+name = "bouldy-runtime"
+version = "0.1.0"
+description = "Safe runtime lifecycle layer for Bouldy Unreal mods"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bouldy-sys = { path = "../bouldy-sys" }
+bouldy-macros = { path = "../bouldy-macros" }
+
+[lints]
+workspace = true
+

@@ -1,0 +1,7 @@
+error: #[unreal_mod] currently supports only unit-like structs
+  --> tests/ui/non_unit_mod_fail.rs:43:1
+   |
+43 | #[unreal_mod]
+   | ^^^^^^^^^^^^^
+   |
+   = note: this error originates in the attribute macro `unreal_mod` (in Nightly builds, run with -Z macro-backtrace for more info)

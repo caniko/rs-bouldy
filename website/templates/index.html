@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <div class="hero-inner hero-grid">
+    <div>
+      <p class="eyebrow">Unreal Engine runtime modding</p>
+      <h1>{{ section.title }}</h1>
+      <p class="tagline">{{ section.extra.tagline }}</p>
+      <p class="subtitle">{{ section.extra.subtitle }}</p>
+      <div class="actions">
+        <a class="button primary" href="{{ config.base_url }}/docs/">Get started</a>
+        <a class="button secondary" href="https://codeberg.org/caniko/rs-bouldy">View source</a>
+      </div>
+    </div>
+    <div class="runtime-visual" aria-label="Bouldy runtime flow">
+      <div class="visual-row">
+        <span>UE4SS shim</span>
+        <strong>C++</strong>
+      </div>
+      <div class="visual-link">bouldy_rust_init_v1</div>
+      <div class="visual-row active">
+        <span>Bouldy runtime</span>
+        <strong>Rust</strong>
+      </div>
+      <div class="visual-link">init · tick · shutdown</div>
+      <div class="visual-row">
+        <span>Mod trait</span>
+        <strong>safe API</strong>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="features" aria-label="Features">
+  <div class="section-inner">
+    <h2>Runtime-focused foundations</h2>
+    <div class="feature-grid">
+      {% for feature in section.extra.features %}
+      <article class="feature-card">
+        <h3>{{ feature.title }}</h3>
+        <p>{{ feature.description }}</p>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="quickstart">
+  <div class="section-inner quickstart-grid">
+    <div>
+      <h2>Build the example DLL</h2>
+      <p>Use the rs-harbor powered Windows shell to produce the Rust mod DLL for a UE4SS-side shim.</p>
+    </div>
+    <pre><code>nix develop .#windows
+{{ section.extra.quick_install }}</code></pre>
+  </div>
+</section>
+{% endblock content %}

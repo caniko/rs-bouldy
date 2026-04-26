@@ -1,0 +1,22 @@
+[workspace]
+members = [
+    "crates/bouldy-sys",
+    "crates/bouldy-runtime",
+    "crates/bouldy-macros",
+    "example-mod",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "ssh://git@codeberg.org/caniko/rs-bouldy.git"
+rust-version = "1.80"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "deny"
+

@@ -1,0 +1,16 @@
+[book]
+title = "Bouldy Documentation"
+authors = ["caniko"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+site-url = "/docs/"
+default-theme = "coal"
+preferred-dark-theme = "coal"
+git-repository-url = "https://codeberg.org/caniko/rs-bouldy"
+edit-url-template = "https://codeberg.org/caniko/rs-bouldy/src/branch/trunk/docs/{path}"
+

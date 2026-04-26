@@ -1,0 +1,14 @@
+/target/
+/.direnv/
+/.cargo/config.toml
+/.cargo/config.toml.bak
+*.pdb
+*.ilk
+*.lib
+*.exp
+*.dll
+*.so
+*.dylib
+docs/book/
+website/public/
+result

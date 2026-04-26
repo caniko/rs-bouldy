@@ -1,0 +1,18 @@
+[package]
+name = "example-mod"
+version = "0.1.0"
+description = "Example Bouldy Rust Unreal runtime mod"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+bouldy-runtime = { path = "../crates/bouldy-runtime" }
+
+[lints]
+workspace = true
+
