@@ -41,17 +41,30 @@ struct DiscoveryCandidate {
     uint64_t flags;
 };
 
-struct UnrealDiscoveryApiV1 {
-    size_t (*scan)(const DiscoveryFilter* filter, DiscoveryVisitor visitor, void* user_data);
+struct DiscoveryCandidateV2 {
+    uint32_t kind;
+    uint32_t schema_version;
+    const char* name;
+    const char* path;
+    const char* owner;
+    uint64_t flags;
+    int32_t chunk_index;
+    int32_t object_index;
+};
+
+using DiscoveryVisitorV2 = bool (*)(const DiscoveryCandidateV2* candidate, void* user_data);
+
+struct UnrealDiscoveryApiV2 {
+    size_t (*scan)(const DiscoveryFilter* filter, DiscoveryVisitorV2 visitor, void* user_data);
     void (*export_record)(const char* channel, const char* payload);
 };
 
-struct UnrealApiV2 {
+struct UnrealApiV3 {
     UnrealApiV1 lifecycle;
-    UnrealDiscoveryApiV1 discovery;
+    UnrealDiscoveryApiV2 discovery;
 };
 
-using BouldyInitV2 = bool (*)(UnrealApiV2* api);
+using BouldyInitV3 = bool (*)(UnrealApiV3* api);
 }
 
 namespace {
@@ -77,7 +90,7 @@ void RegisterShutdown(ShutdownCallback callback) {
     g_shutdown_callback = callback;
 }
 
-size_t ScanDiscovery(const DiscoveryFilter* filter, DiscoveryVisitor visitor, void* user_data) {
+size_t ScanDiscovery(const DiscoveryFilter* filter, DiscoveryVisitorV2 visitor, void* user_data) {
     // Replace this stub with UE4SS-backed object/class/function/property
     // enumeration. The filter terms are generic UTF-8 strings supplied by Rust.
     if (!filter || !visitor) {
@@ -106,16 +119,16 @@ bool Startup() {
         return false;
     }
 
-    auto init = reinterpret_cast<BouldyInitV2>(
-        GetProcAddress(g_rust_module, "bouldy_rust_init_v2"));
+    auto init = reinterpret_cast<BouldyInitV3>(
+        GetProcAddress(g_rust_module, "bouldy_rust_init_v3"));
     if (!init) {
-        ShimLog("failed to find bouldy_rust_init_v2");
+        ShimLog("failed to find bouldy_rust_init_v3");
         FreeLibrary(g_rust_module);
         g_rust_module = nullptr;
         return false;
     }
 
-    UnrealApiV2 api{};
+    UnrealApiV3 api{};
     api.lifecycle.base.log = &ShimLog;
     api.lifecycle.base.get_delta_seconds = &GetDeltaSeconds;
     api.lifecycle.register_tick = &RegisterTick;

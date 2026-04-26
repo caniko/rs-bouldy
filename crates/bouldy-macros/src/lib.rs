@@ -93,6 +93,21 @@ pub fn unreal_mod(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 },
             )
         }
+
+        #[doc(hidden)]
+        #[no_mangle]
+        pub extern "C" fn bouldy_rust_init_v3(api: *mut ::bouldy_runtime::UnrealApiV3) -> bool {
+            ::bouldy_runtime::init_with_v3_api(
+                api,
+                bouldy_tick_trampoline,
+                bouldy_shutdown_trampoline,
+                |ctx| {
+                    bouldy_with_mod_instance(|module| {
+                        <#ident as ::bouldy_runtime::Mod>::on_init(module, ctx);
+                    });
+                },
+            )
+        }
     };
 
     TokenStream::from(expanded)

@@ -6,17 +6,18 @@ use std::ptr::NonNull;
 use std::sync::{Mutex, OnceLock};
 
 pub use bouldy_sys::{
-    DiscoveryCandidate as RawDiscoveryCandidate, DiscoveryFilter as RawDiscoveryFilter,
-    DiscoveryKind as RawDiscoveryKind, ShutdownCallback, TickCallback, UnrealApi, UnrealApiV1,
-    UnrealApiV2, UnrealDiscoveryApiV1, DISCOVERY_KIND_ANY, DISCOVERY_KIND_CLASS,
-    DISCOVERY_KIND_FUNCTION, DISCOVERY_KIND_OBJECT, DISCOVERY_KIND_PROPERTY,
-    DISCOVERY_KIND_UNKNOWN,
+    DiscoveryCandidate as RawDiscoveryCandidate, DiscoveryCandidateV2 as RawDiscoveryCandidateV2,
+    DiscoveryFilter as RawDiscoveryFilter, DiscoveryKind as RawDiscoveryKind, ShutdownCallback,
+    TickCallback, UnrealApi, UnrealApiV1, UnrealApiV2, UnrealApiV3, UnrealDiscoveryApiV1,
+    UnrealDiscoveryApiV2, DISCOVERY_KIND_ANY, DISCOVERY_KIND_CLASS, DISCOVERY_KIND_FUNCTION,
+    DISCOVERY_KIND_OBJECT, DISCOVERY_KIND_PROPERTY, DISCOVERY_KIND_UNKNOWN,
 };
 
 #[derive(Default)]
 struct RuntimeState {
     api_addr: Option<usize>,
-    discovery_api_addr: Option<usize>,
+    discovery_v1_api_addr: Option<usize>,
+    discovery_v2_api_addr: Option<usize>,
 }
 
 static RUNTIME: OnceLock<Mutex<RuntimeState>> = OnceLock::new();
@@ -32,11 +33,20 @@ fn set_api(api: NonNull<UnrealApi>) {
     state.api_addr = Some(api.as_ptr() as usize);
 }
 
-fn set_discovery_api(api: Option<NonNull<UnrealDiscoveryApiV1>>) {
+fn set_discovery_v1_api(api: Option<NonNull<UnrealDiscoveryApiV1>>) {
     let mut state = runtime_state()
         .lock()
         .unwrap_or_else(|err| err.into_inner());
-    state.discovery_api_addr = api.map(|api| api.as_ptr() as usize);
+    state.discovery_v1_api_addr = api.map(|api| api.as_ptr() as usize);
+    state.discovery_v2_api_addr = None;
+}
+
+fn set_discovery_v2_api(api: Option<NonNull<UnrealDiscoveryApiV2>>) {
+    let mut state = runtime_state()
+        .lock()
+        .unwrap_or_else(|err| err.into_inner());
+    state.discovery_v1_api_addr = None;
+    state.discovery_v2_api_addr = api.map(|api| api.as_ptr() as usize);
 }
 
 fn current_api() -> Option<NonNull<UnrealApi>> {
@@ -47,12 +57,15 @@ fn current_api() -> Option<NonNull<UnrealApi>> {
     NonNull::new(addr as *mut UnrealApi)
 }
 
-fn current_discovery_api() -> Option<NonNull<UnrealDiscoveryApiV1>> {
+fn current_discovery_api() -> Option<DiscoveryApi> {
     let state = runtime_state()
         .lock()
         .unwrap_or_else(|err| err.into_inner());
-    let addr = state.discovery_api_addr?;
-    NonNull::new(addr as *mut UnrealDiscoveryApiV1)
+    if let Some(addr) = state.discovery_v2_api_addr {
+        return NonNull::new(addr as *mut UnrealDiscoveryApiV2).map(DiscoveryApi::V2);
+    }
+    let addr = state.discovery_v1_api_addr?;
+    NonNull::new(addr as *mut UnrealDiscoveryApiV1).map(DiscoveryApi::V1)
 }
 
 #[cfg(test)]
@@ -61,7 +74,8 @@ fn reset_runtime_for_tests() {
         .lock()
         .unwrap_or_else(|err| err.into_inner());
     state.api_addr = None;
-    state.discovery_api_addr = None;
+    state.discovery_v1_api_addr = None;
+    state.discovery_v2_api_addr = None;
 }
 
 /// Context passed to mod lifecycle callbacks.
@@ -97,20 +111,35 @@ impl ModContext {
 
     /// Return the host discovery API, if this mod was initialized through V2.
     pub fn discovery(&self) -> Option<DiscoveryContext> {
-        current_discovery_api().map(DiscoveryContext::new)
+        current_discovery_api().map(|api| DiscoveryContext { api })
     }
 }
 
 /// Safe wrapper for the host discovery API.
 #[derive(Clone, Copy)]
 pub struct DiscoveryContext {
-    api: NonNull<UnrealDiscoveryApiV1>,
+    api: DiscoveryApi,
+}
+
+#[derive(Clone, Copy)]
+enum DiscoveryApi {
+    V1(NonNull<UnrealDiscoveryApiV1>),
+    V2(NonNull<UnrealDiscoveryApiV2>),
 }
 
 impl DiscoveryContext {
-    /// Create a discovery context from a validated host API pointer.
+    /// Create a discovery context from a validated V1 host API pointer.
     pub fn new(api: NonNull<UnrealDiscoveryApiV1>) -> Self {
-        Self { api }
+        Self {
+            api: DiscoveryApi::V1(api),
+        }
+    }
+
+    /// Create a discovery context from a validated V2 host API pointer.
+    pub fn new_v2(api: NonNull<UnrealDiscoveryApiV2>) -> Self {
+        Self {
+            api: DiscoveryApi::V2(api),
+        }
     }
 
     /// Scan candidates matching `query`.
@@ -161,23 +190,69 @@ impl DiscoveryContext {
             visitor: &mut visitor_ref,
         };
 
-        // SAFETY: `DiscoveryContext` is constructed from a non-null discovery
-        // table. The filter and term C strings remain valid for this call.
-        unsafe {
-            bouldy_sys::scan_discovery(
-                self.api.as_ptr(),
-                &filter,
-                trampoline,
-                std::ptr::addr_of_mut!(state).cast::<c_void>(),
-            )
+        match self.api {
+            DiscoveryApi::V1(api) => {
+                // SAFETY: `DiscoveryContext` is constructed from a non-null
+                // discovery table. The filter and term C strings remain valid
+                // for this call.
+                unsafe {
+                    bouldy_sys::scan_discovery(
+                        api.as_ptr(),
+                        &filter,
+                        trampoline,
+                        std::ptr::addr_of_mut!(state).cast::<c_void>(),
+                    )
+                }
+            }
+            DiscoveryApi::V2(api) => {
+                extern "C" fn trampoline_v2(
+                    candidate: *const RawDiscoveryCandidateV2,
+                    user_data: *mut c_void,
+                ) -> bool {
+                    // SAFETY: The host discovery backend passes a candidate
+                    // pointer that is valid for the duration of this call.
+                    let Some(candidate) = (unsafe { candidate.as_ref() }) else {
+                        return true;
+                    };
+                    // SAFETY: `user_data` is the `VisitorState` pointer supplied
+                    // by `DiscoveryContext::scan` for this synchronous scan call.
+                    let Some(state) = (unsafe { (user_data as *mut VisitorState<'_>).as_mut() })
+                    else {
+                        return false;
+                    };
+                    let candidate = DiscoveryCandidate::from_raw_v2(candidate);
+                    (state.visitor)(candidate)
+                }
+
+                // SAFETY: `DiscoveryContext` is constructed from a non-null
+                // discovery table. The filter and term C strings remain valid
+                // for this call.
+                unsafe {
+                    bouldy_sys::scan_discovery_v2(
+                        api.as_ptr(),
+                        &filter,
+                        trampoline_v2,
+                        std::ptr::addr_of_mut!(state).cast::<c_void>(),
+                    )
+                }
+            }
         }
     }
 
     /// Export a structured discovery record through the host backend.
     pub fn export_record(&self, channel: &str, payload: &str) {
-        // SAFETY: `DiscoveryContext` is constructed from a non-null discovery
-        // table. Strings are sanitized by `bouldy-sys`.
-        unsafe { bouldy_sys::export_discovery_record(self.api.as_ptr(), channel, payload) };
+        match self.api {
+            DiscoveryApi::V1(api) => {
+                // SAFETY: `DiscoveryContext` is constructed from a non-null
+                // discovery table. Strings are sanitized by `bouldy-sys`.
+                unsafe { bouldy_sys::export_discovery_record(api.as_ptr(), channel, payload) };
+            }
+            DiscoveryApi::V2(api) => {
+                // SAFETY: `DiscoveryContext` is constructed from a non-null
+                // discovery table. Strings are sanitized by `bouldy-sys`.
+                unsafe { bouldy_sys::export_discovery_record_v2(api.as_ptr(), channel, payload) };
+            }
+        }
     }
 }
 
@@ -247,6 +322,12 @@ pub struct DiscoveryCandidate {
     pub owner: Option<String>,
     /// Backend-specific flags.
     pub flags: u64,
+    /// Candidate schema version from the host discovery backend.
+    pub schema_version: u32,
+    /// Unreal object array chunk index, when known.
+    pub chunk_index: Option<i32>,
+    /// Unreal object index within the chunk/global object array, when known.
+    pub object_index: Option<i32>,
 }
 
 impl DiscoveryCandidate {
@@ -257,8 +338,28 @@ impl DiscoveryCandidate {
             path: optional_c_string(raw.path),
             owner: optional_c_string(raw.owner),
             flags: raw.flags,
+            schema_version: 1,
+            chunk_index: None,
+            object_index: None,
         }
     }
+
+    fn from_raw_v2(raw: &RawDiscoveryCandidateV2) -> Self {
+        Self {
+            kind: raw.kind,
+            name: optional_c_string(raw.name),
+            path: optional_c_string(raw.path),
+            owner: optional_c_string(raw.owner),
+            flags: raw.flags,
+            schema_version: raw.schema_version,
+            chunk_index: non_negative_index(raw.chunk_index),
+            object_index: non_negative_index(raw.object_index),
+        }
+    }
+}
+
+fn non_negative_index(index: i32) -> Option<i32> {
+    (index >= 0).then_some(index)
 }
 
 fn optional_c_string(ptr: *const c_char) -> Option<String> {
@@ -280,10 +381,10 @@ pub trait Mod {
     /// Called once when the loader initializes the Rust mod.
     fn on_init(&mut self, _ctx: &mut ModContext) {}
 
-    /// Called by the host shim each frame when V1/V2 tick registration is used.
+    /// Called by the host shim each frame when V1/V2/V3 tick registration is used.
     fn on_tick(&mut self, _delta: f32) {}
 
-    /// Called by the host shim during shutdown when V1/V2 shutdown registration is used.
+    /// Called by the host shim during shutdown when V1/V2/V3 shutdown registration is used.
     fn on_shutdown(&mut self) {}
 }
 
@@ -306,7 +407,7 @@ pub fn init_with_base_api(api: *mut UnrealApi, init: impl FnOnce(&mut ModContext
         };
 
         set_api(api);
-        set_discovery_api(None);
+        set_discovery_v1_api(None);
         let mut ctx = ModContext::new(api);
         init(&mut ctx);
         true
@@ -329,7 +430,7 @@ pub fn init_with_v1_api(
         };
 
         set_api(base_api);
-        set_discovery_api(None);
+        set_discovery_v1_api(None);
         let mut ctx = ModContext::new(base_api);
         init(&mut ctx);
 
@@ -365,11 +466,47 @@ pub fn init_with_v2_api(
         };
 
         set_api(base_api);
-        set_discovery_api(discovery_api);
+        set_discovery_v1_api(discovery_api);
         let mut ctx = ModContext::new(base_api);
         init(&mut ctx);
 
         // SAFETY: The host supplied a valid V2 table for this init call.
+        unsafe {
+            bouldy_sys::register_tick(lifecycle_api.as_ptr(), tick_callback);
+            bouldy_sys::register_shutdown(lifecycle_api.as_ptr(), shutdown_callback);
+        }
+
+        true
+    })
+}
+
+/// Run an init boundary with a V3 API pointer and register lifecycle callbacks.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub fn init_with_v3_api(
+    api: *mut UnrealApiV3,
+    tick_callback: TickCallback,
+    shutdown_callback: ShutdownCallback,
+    init: impl FnOnce(&mut ModContext),
+) -> bool {
+    catch_ffi_bool("panic during Rust mod V3 init", || {
+        // SAFETY: The caller is an FFI entrypoint. We validate null here, and
+        // the host owns the lifetime contract for the pointed-to API table.
+        let Some(base_api) = (unsafe { bouldy_sys::base_from_v3(api) }) else {
+            return false;
+        };
+        // SAFETY: Same validated V3 table as above.
+        let discovery_api = unsafe { bouldy_sys::discovery_from_v3(api) };
+        // SAFETY: Same validated V3 table as above.
+        let Some(lifecycle_api) = (unsafe { bouldy_sys::lifecycle_from_v3(api) }) else {
+            return false;
+        };
+
+        set_api(base_api);
+        set_discovery_v2_api(discovery_api);
+        let mut ctx = ModContext::new(base_api);
+        init(&mut ctx);
+
+        // SAFETY: The host supplied a valid V3 table for this init call.
         unsafe {
             bouldy_sys::register_tick(lifecycle_api.as_ptr(), tick_callback);
             bouldy_sys::register_shutdown(lifecycle_api.as_ptr(), shutdown_callback);
@@ -411,7 +548,7 @@ pub mod prelude {
 
     pub use crate::{
         log, DiscoveryCandidate, DiscoveryContext, DiscoveryQuery, Mod, ModContext, UnrealApi,
-        UnrealApiV1, UnrealApiV2,
+        UnrealApiV1, UnrealApiV2, UnrealApiV3,
     };
 }
 
@@ -489,6 +626,41 @@ mod tests {
         1
     }
 
+    extern "C" fn scan_v2_callback(
+        filter: *const RawDiscoveryFilter,
+        visitor: bouldy_sys::DiscoveryVisitorV2,
+        user_data: *mut c_void,
+    ) -> usize {
+        assert!(!filter.is_null());
+        // SAFETY: The runtime passes a valid filter pointer for the scan call.
+        let filter = unsafe { &*filter };
+        assert_eq!(filter.term_count, 2);
+        assert_eq!(
+            filter.kind_mask,
+            DISCOVERY_KIND_FUNCTION | DISCOVERY_KIND_PROPERTY
+        );
+        assert_eq!(filter.max_results, 8);
+
+        let name = CString::new("EnemyDodgePunishWindow").unwrap();
+        let path = CString::new("/Script/SB.EnemyDodgePunishWindow").unwrap();
+        let owner = CString::new("SBEnemyCombatComponent").unwrap();
+        let candidate = RawDiscoveryCandidateV2 {
+            kind: DISCOVERY_KIND_PROPERTY,
+            schema_version: 2,
+            name: name.as_ptr(),
+            path: path.as_ptr(),
+            owner: owner.as_ptr(),
+            flags: 77,
+            chunk_index: 4,
+            object_index: 255,
+        };
+
+        if visitor(&candidate, user_data) {
+            DISCOVERY_VISITS.fetch_add(1, Ordering::SeqCst);
+        }
+        1
+    }
+
     extern "C" fn export_callback(channel: *const c_char, payload: *const c_char) {
         // SAFETY: Test callers pass valid null-terminated strings.
         let channel = unsafe { CStr::from_ptr(channel) }
@@ -518,6 +690,16 @@ mod tests {
             lifecycle: test_api_v1(),
             discovery: UnrealDiscoveryApiV1 {
                 scan: Some(scan_callback),
+                export_record: Some(export_callback),
+            },
+        }
+    }
+
+    fn test_api_v3() -> UnrealApiV3 {
+        UnrealApiV3 {
+            lifecycle: test_api_v1(),
+            discovery: UnrealDiscoveryApiV2 {
+                scan: Some(scan_v2_callback),
                 export_record: Some(export_callback),
             },
         }
@@ -716,6 +898,67 @@ mod tests {
         assert_eq!(
             LAST_LOG.lock().unwrap().as_deref(),
             Some("panic during Rust mod V2 init")
+        );
+        assert_eq!(TICK_REGISTRATIONS.load(Ordering::SeqCst), 0);
+        assert_eq!(SHUTDOWN_REGISTRATIONS.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn v3_init_registers_lifecycle_and_indexed_discovery_callbacks() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_test_state();
+
+        let mut api = test_api_v3();
+        assert!(init_with_v3_api(
+            &mut api,
+            test_tick,
+            test_shutdown,
+            |ctx| {
+                ctx.log("v3 initialized");
+                let discovery = ctx.discovery().expect("discovery context");
+                let query = DiscoveryQuery::new(["parry", "dodge"])
+                    .with_kind_mask(DISCOVERY_KIND_FUNCTION | DISCOVERY_KIND_PROPERTY)
+                    .with_max_results(8);
+                let mut seen = Vec::new();
+                let count = discovery.scan(&query, |candidate| {
+                    seen.push(candidate);
+                    true
+                });
+                assert_eq!(count, 1);
+                assert_eq!(seen.len(), 1);
+                assert_eq!(seen[0].schema_version, 2);
+                assert_eq!(seen[0].name.as_deref(), Some("EnemyDodgePunishWindow"));
+                assert_eq!(seen[0].chunk_index, Some(4));
+                assert_eq!(seen[0].object_index, Some(255));
+                discovery.export_record("combat", "{\"kind\":\"property\"}");
+            }
+        ));
+
+        assert_eq!(TICK_REGISTRATIONS.load(Ordering::SeqCst), 1);
+        assert_eq!(SHUTDOWN_REGISTRATIONS.load(Ordering::SeqCst), 1);
+        assert_eq!(DISCOVERY_VISITS.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            EXPORTED_RECORD.lock().unwrap().as_ref(),
+            Some(&("combat".to_owned(), "{\"kind\":\"property\"}".to_owned()))
+        );
+    }
+
+    #[test]
+    fn v3_init_panic_returns_false_and_does_not_register_callbacks() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        reset_test_state();
+        let mut api = test_api_v3();
+
+        assert!(!init_with_v3_api(
+            &mut api,
+            test_tick,
+            test_shutdown,
+            |_| panic!("boom")
+        ));
+
+        assert_eq!(
+            LAST_LOG.lock().unwrap().as_deref(),
+            Some("panic during Rust mod V3 init")
         );
         assert_eq!(TICK_REGISTRATIONS.load(Ordering::SeqCst), 0);
         assert_eq!(SHUTDOWN_REGISTRATIONS.load(Ordering::SeqCst), 0);
