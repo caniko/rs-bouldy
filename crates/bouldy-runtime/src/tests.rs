@@ -389,6 +389,76 @@ fn v3_init_registers_lifecycle_and_indexed_discovery_callbacks() {
 }
 
 #[test]
+fn scan_and_export_json_records_exports_matching_candidates() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    reset_test_state();
+
+    let mut api = test_api_v3();
+    assert!(init_with_v3_api(
+        &mut api,
+        test_tick,
+        test_shutdown,
+        |ctx| {
+            let discovery = ctx.discovery().expect("discovery context");
+            let query = DiscoveryQuery::new(["parry", "dodge"])
+                .with_kind_mask(DISCOVERY_KIND_FUNCTION | DISCOVERY_KIND_PROPERTY)
+                .with_max_results(8);
+            let exported =
+                discovery.scan_and_export_json_records(&query, "combat", |candidate| {
+                    candidate.matches_any_term(["dodge"])
+                });
+            assert_eq!(exported, 1);
+        }
+    ));
+
+    assert_eq!(
+        EXPORTED_RECORD.lock().unwrap().as_ref(),
+        Some(&(
+            "combat".to_owned(),
+            "{\"schema_version\":2,\"kind\":8,\"name\":\"EnemyDodgePunishWindow\",\"path\":\"/Script/SB.EnemyDodgePunishWindow\",\"owner\":\"SBEnemyCombatComponent\",\"flags\":77,\"chunk_index\":4,\"object_index\":255}".to_owned()
+        ))
+    );
+}
+
+#[test]
+fn discovery_candidate_matches_terms_across_fields() {
+    let candidate = DiscoveryCandidate {
+        kind: DISCOVERY_KIND_FUNCTION,
+        name: Some("CanPerfectParry".to_owned()),
+        path: Some("/Script/SB.PlayerCombatComponent".to_owned()),
+        owner: Some("Eve".to_owned()),
+        flags: 0,
+        schema_version: 2,
+        chunk_index: Some(1),
+        object_index: Some(24),
+    };
+
+    assert!(candidate.matches_any_term(["parry"]));
+    assert!(candidate.matches_any_term(["PLAYER"]));
+    assert!(candidate.matches_any_term(["eve"]));
+    assert!(!candidate.matches_any_term(["weather"]));
+}
+
+#[test]
+fn discovery_candidate_record_json_is_stable_and_escaped() {
+    let candidate = DiscoveryCandidate {
+        kind: DISCOVERY_KIND_FUNCTION,
+        name: Some("Parry\"Window".to_owned()),
+        path: Some("/Script/SB\\Combat".to_owned()),
+        owner: None,
+        flags: 7,
+        schema_version: 2,
+        chunk_index: Some(3),
+        object_index: None,
+    };
+
+    assert_eq!(
+        candidate.record_json(),
+        "{\"schema_version\":2,\"kind\":4,\"name\":\"Parry\\\"Window\",\"path\":\"/Script/SB\\\\Combat\",\"owner\":null,\"flags\":7,\"chunk_index\":3,\"object_index\":null}"
+    );
+}
+
+#[test]
 fn v3_init_panic_returns_false_and_does_not_register_callbacks() {
     let _guard = TEST_LOCK.lock().unwrap();
     reset_test_state();

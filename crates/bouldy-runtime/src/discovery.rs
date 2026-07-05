@@ -81,6 +81,25 @@ impl DiscoveryContext {
             }
         }
     }
+
+    /// Scan candidates, export matching candidates as stable JSON records, and
+    /// return the number of exported records.
+    pub fn scan_and_export_json_records(
+        &self,
+        query: &DiscoveryQuery,
+        channel: &str,
+        mut predicate: impl FnMut(&DiscoveryCandidate) -> bool,
+    ) -> usize {
+        let mut exported = 0usize;
+        self.scan(query, |candidate| {
+            if predicate(&candidate) {
+                self.export_record(channel, &candidate.record_json());
+                exported = exported.saturating_add(1);
+            }
+            true
+        });
+        exported
+    }
 }
 
 struct VisitorState<'a> {
@@ -255,10 +274,69 @@ impl DiscoveryCandidate {
             object_index: non_negative_index(raw.object_index),
         }
     }
+
+    /// Return whether any term appears in the candidate name, path, or owner.
+    ///
+    /// Matching is ASCII case-insensitive and intended for broad discovery
+    /// reconnaissance terms, not locale-aware text search.
+    pub fn matches_any_term<'a>(&self, terms: impl IntoIterator<Item = &'a str>) -> bool {
+        let haystack = [
+            self.name.as_deref().unwrap_or_default(),
+            self.path.as_deref().unwrap_or_default(),
+            self.owner.as_deref().unwrap_or_default(),
+        ]
+        .join(" ")
+        .to_ascii_lowercase();
+
+        terms
+            .into_iter()
+            .any(|term| haystack.contains(&term.to_ascii_lowercase()))
+    }
+
+    /// Format a stable JSON discovery record without adding a JSON dependency.
+    pub fn record_json(&self) -> String {
+        format!(
+            "{{\"schema_version\":{},\"kind\":{},\"name\":{},\"path\":{},\"owner\":{},\"flags\":{},\"chunk_index\":{},\"object_index\":{}}}",
+            self.schema_version,
+            self.kind,
+            json_string(self.name.as_deref()),
+            json_string(self.path.as_deref()),
+            json_string(self.owner.as_deref()),
+            self.flags,
+            json_i32(self.chunk_index),
+            json_i32(self.object_index)
+        )
+    }
 }
 
 fn non_negative_index(index: i32) -> Option<i32> {
     (index >= 0).then_some(index)
+}
+
+fn json_i32(value: Option<i32>) -> String {
+    value.map_or_else(|| "null".to_owned(), |value| value.to_string())
+}
+
+fn json_string(value: Option<&str>) -> String {
+    match value {
+        Some(value) => format!("\"{}\"", json_escape(value)),
+        None => "null".to_owned(),
+    }
+}
+
+fn json_escape(value: &str) -> String {
+    value
+        .chars()
+        .flat_map(|ch| match ch {
+            '"' => "\\\"".chars().collect::<Vec<_>>(),
+            '\\' => "\\\\".chars().collect::<Vec<_>>(),
+            '\n' => "\\n".chars().collect::<Vec<_>>(),
+            '\r' => "\\r".chars().collect::<Vec<_>>(),
+            '\t' => "\\t".chars().collect::<Vec<_>>(),
+            ch if ch.is_control() => " ".chars().collect::<Vec<_>>(),
+            ch => vec![ch],
+        })
+        .collect::<String>()
 }
 
 fn optional_c_string(ptr: *const c_char) -> Option<String> {
