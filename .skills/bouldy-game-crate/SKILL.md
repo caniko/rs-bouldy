@@ -3,7 +3,7 @@ name: bouldy-game-crate
 description: Scaffold or update a game-specific UE4 modkit built on Bouldy for a particular Unreal Engine game. Use when creating per-game Rust mod crates, UE4SS/Bouldy loader shims, mirror-project notes, cooked asset mod workspace layout, runtime tick/init logic, or project flakes for Bouldy-based Unreal runtime mods. Always use the "rust project flake" skill to generate or update Nix flakes for Rust crates when that skill is available.
 ---
 
-**Cross-repository work:** As soon as work is known to span more than one Git repository, invoke `$graphify` before further discovery, planning, or edits. Query a relevant existing graph first; build or update a merged graph if none exists, it is stale, or it does not cover every repository in scope. Reuse a current graph already produced for the same repository set.
+**Cross-repository work:** If scope spans repositories, invoke `$graphify` before discovery, planning, or edits. Query an existing graph; build/update a merged graph when missing, stale, or incomplete. Reuse a current graph for the same repository set.
 
 # bouldy-game-crate
 
