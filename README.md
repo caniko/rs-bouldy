@@ -1,5 +1,11 @@
 # Bouldy
 
+<!-- simit:badges:start -->
+
+![CI](https://img.shields.io/badge/CI-managed-2088ff) [![docs](https://img.shields.io/badge/docs-enabled-6f42c1)](docs) [![crates.io](https://img.shields.io/badge/crates.io-ready-f46623)](https://crates.io/crates/bouldy-macros)
+
+<!-- simit:badges:end -->
+
 Bouldy is a minimal Rust workspace for runtime modding of Unreal Engine games. It focuses on in-memory lifecycle and logic integration through a small UE4SS-compatible C++ shim.
 
 This MVP deliberately does not parse assets, build `.pak` files, generate Unreal SDK bindings, or include game-specific logic. Offline tooling remains the domain of projects such as `AstroTechies/unrealmodding`.
