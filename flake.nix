@@ -11,7 +11,7 @@
   };
 
   inputs = {
-    rs-harbor.url = "git+https://codeberg.org/caniko/rs-harbor.git?ref=trunk&rev=9bfa8bdb0ecb22d7bc11448665f7fbaebae7a759";
+    rs-harbor.url = "git+https://codeberg.org/caniko/rs-harbor.git?ref=trunk&rev=c26b735eede8078f795651c4a9cbf0be8733b221";
 
     rs-harbor-macos-sdk-pin.url = "git+ssh://git@codeberg.org/caniko/rs-harbor-macos-sdk-pin.git";
 
@@ -43,7 +43,7 @@
 
         toolchain = rs-harbor.lib.mkToolchain {
           inherit pkgs;
-          channel = "stable";
+          toolchainProfile = "nightly";
           extensions = ["rust-src" "rustfmt" "clippy"];
           crossTargets = [
             "x86_64-unknown-linux-gnu"
@@ -60,7 +60,7 @@
 
         cargoConfig = rs-harbor.lib.mkCargoConfig {
           inherit pkgs;
-          channel = "stable";
+          toolchainProfile = "nightly";
           crossTargets = toolchain.crossTargets;
         };
 
