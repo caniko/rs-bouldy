@@ -9,7 +9,7 @@
 ## Clone
 
 ```bash
-git clone ssh://git@codeberg.org/caniko/rs-bouldy.git
+git clone ssh://git@github.com/caniko/rs-bouldy.git
 cd rs-bouldy
 ```
 

@@ -11,6 +11,6 @@ build-dir = "book"
 site-url = "/docs/"
 default-theme = "coal"
 preferred-dark-theme = "coal"
-git-repository-url = "https://codeberg.org/caniko/rs-bouldy"
-edit-url-template = "https://codeberg.org/caniko/rs-bouldy/src/branch/trunk/docs/{path}"
+git-repository-url = "https://github.com/caniko/rs-bouldy"
+edit-url-template = "https://github.com/caniko/rs-bouldy/blob/trunk/docs/{path}"
 

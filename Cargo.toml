@@ -10,7 +10,7 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "ssh://git@codeberg.org/caniko/rs-bouldy.git"
+repository = "ssh://git@github.com/caniko/rs-bouldy.git"
 rust-version = "1.80"
 
 [workspace.lints.rust]

@@ -16,5 +16,4 @@ The project is intentionally narrow. It does not parse assets, build `.pak` file
 
 Bouldy is complementary to projects such as `AstroTechies/unrealmodding`, which focus on asset parsing, `.pak` handling, and offline pipelines. Bouldy stays on the runtime side.
 
-Source code is hosted on [Codeberg](https://codeberg.org/caniko/rs-bouldy).
-
+Source code is hosted on [GitHub](https://github.com/caniko/rs-bouldy).

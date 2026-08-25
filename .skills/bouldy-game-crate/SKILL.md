@@ -126,7 +126,7 @@ license = "MIT OR Apache-2.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-bouldy-runtime = { git = "ssh://git@codeberg.org/caniko/rs-bouldy.git" }
+bouldy-runtime = { git = "ssh://git@github.com/caniko/rs-bouldy.git" }
 ```
 
 Use a path dependency instead when the crate is developed in a sibling checkout:
