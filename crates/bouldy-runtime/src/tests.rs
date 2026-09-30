@@ -403,10 +403,9 @@ fn scan_and_export_json_records_exports_matching_candidates() {
             let query = DiscoveryQuery::new(["parry", "dodge"])
                 .with_kind_mask(DISCOVERY_KIND_FUNCTION | DISCOVERY_KIND_PROPERTY)
                 .with_max_results(8);
-            let exported =
-                discovery.scan_and_export_json_records(&query, "combat", |candidate| {
-                    candidate.matches_any_term(["dodge"])
-                });
+            let exported = discovery.scan_and_export_json_records(&query, "combat", |candidate| {
+                candidate.matches_any_term(["dodge"])
+            });
             assert_eq!(exported, 1);
         }
     ));
