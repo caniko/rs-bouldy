@@ -60,7 +60,7 @@
 
         cargoConfig = rs-harbor.lib.mkCargoConfig {
           inherit pkgs;
-          toolchainProfile = "nightly";
+          channel = "nightly";
           crossTargets = toolchain.crossTargets;
         };
 
