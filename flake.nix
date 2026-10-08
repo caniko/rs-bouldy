@@ -6,7 +6,7 @@
   nixConfig = {
     extra-substituters = ["https://attic.candee.baby/harbor-macos-sdk"];
     extra-trusted-public-keys = [
-      "harbor-macos-sdk:ci7MNMkHDqdeTS4aKwzDNEJ1175AbpVUypTRjCJoHDk="
+      "harbor-macos-sdk:MLRX9qZASKwDh48UWON67cvYxfEbqvjfIZQmGwt1v1E="
     ];
   };
 
