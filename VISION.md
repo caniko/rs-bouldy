@@ -55,12 +55,12 @@ Nix/Cargo workflows for native validation plus Windows DLL builds through a
 
 There is no roadmap document. Recent history is environment and CI upkeep:
 Harbor/GitHub input migration, an `rs-harbor` toolchain profile, Crow/Simit
-workflows, and refreshed generated skill views. The ABI already carries V1 and
-V2 tables, so the visible direction is additive ABI revisions as new runtime
+workflows, and refreshed generated skill views. The ABI already carries V1, V2
+and V3 tables, so the visible direction is additive ABI revisions as new runtime
 services are needed.
 
 ## Place in the fleet
 
-Canix lists Bouldy as a Simit updater target and carries its skill catalogue
-entry, so its flake and generated CI are refreshed fleet-wide. No Canix host
-depends on it.
+Canix carries Bouldy's skill catalogue entry and lists it as a Simit updater
+target, currently disabled in atlas fleet policy pending migration from its Crow
+workflows. No Canix host depends on it.
